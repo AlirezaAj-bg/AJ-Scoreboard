@@ -1,6 +1,8 @@
 local QBCore = exports['qb-core']:GetCoreObject({ 'Functions' })
 local scoreboardOpen = false
-local playerOptin = {}
+local session = 0          -- bumped on every open so threads from a previous open exit
+local canSeeIds = false    -- decided by the server for this player only
+local overhead = {}        -- players inside Config.OverheadDistance, refreshed every 500ms
 
 -- Control ids used while the board is open (it never takes NUI focus, so the
 -- player keeps walking / driving and we read these instead)
@@ -59,10 +61,29 @@ local function GetNearbyPlayers(radius)
     return list
 end
 
+local function SendSetup()
+    local counters = {}
+    for i = 1, #Config.JobCounters do
+        local c = Config.JobCounters[i]
+        counters[i] = { job = c.job, label = c.label, icon = c.icon }
+    end
+    SendNUIMessage({
+        action = 'setup',
+        serverName = Config.ServerName,
+        tag = Config.ServerTag,
+        accent = Config.Accent,
+        toggle = Config.Toggle,
+        openKey = Config.OpenKey,
+        jobCounters = counters,
+        showDisconnected = Config.Disconnected.enabled,
+    })
+end
+
 local function RefreshData()
-    QBCore.Functions.TriggerCallback('aj-scoreboard:server:GetScoreboardData', function(data, optin)
-        if not scoreboardOpen then return end
-        playerOptin = optin or {}
+    local mySession = session
+    QBCore.Functions.TriggerCallback('aj-scoreboard:server:GetScoreboardData', function(data, seeIds)
+        if not scoreboardOpen or mySession ~= session then return end
+        canSeeIds = seeIds == true
         SendNUIMessage({ action = 'update', data = data })
     end)
 end
@@ -70,37 +91,49 @@ end
 local function CloseScoreboard()
     if not scoreboardOpen then return end
     scoreboardOpen = false
+    overhead = {}
     SendNUIMessage({ action = 'close' })
 end
 
 local function OpenScoreboard()
     if scoreboardOpen or IsPauseMenuActive() then return end
     scoreboardOpen = true
+    session = session + 1
+    local mySession = session
+    local function alive() return scoreboardOpen and mySession == session end
 
+    SendSetup() -- resent on every open in case the NUI page wasn't ready at startup
     SendNUIMessage({
         action = 'open',
         myId = GetPlayerServerId(PlayerId()),
-        maxPlayers = Config.MaxPlayers,
         nearbyDistance = Config.NearbyDistance,
     })
     RefreshData()
 
     -- periodic server refresh
     CreateThread(function()
-        while scoreboardOpen do
+        while alive() do
             Wait(Config.RefreshInterval)
-            if scoreboardOpen then RefreshData() end
+            if alive() then RefreshData() end
         end
     end)
 
-    -- nearby players (client-side, cheap)
+    -- nearby players + overhead cache (client-side, cheap)
     CreateThread(function()
-        while scoreboardOpen do
-            local nearby = GetNearbyPlayers(Config.NearbyDistance)
-            local out = {}
+        while alive() do
+            local radius = math.max(Config.NearbyDistance, Config.OverheadDistance)
+            local nearby = GetNearbyPlayers(radius)
+            local out, heads = {}, {}
             for i = 1, #nearby do
-                out[i] = { id = nearby[i].id, dist = nearby[i].dist, talking = nearby[i].talking }
+                local p = nearby[i]
+                if p.dist <= Config.NearbyDistance then
+                    out[#out + 1] = { id = p.id, dist = p.dist, talking = p.talking }
+                end
+                if p.dist <= Config.OverheadDistance then
+                    heads[#heads + 1] = { player = p.player, ped = p.ped, label = ('[%d]'):format(p.id) }
+                end
             end
+            overhead = heads
             SendNUIMessage({ action = 'nearby', list = out })
             Wait(500)
         end
@@ -108,7 +141,7 @@ local function OpenScoreboard()
 
     -- per-frame: tab / scroll controls + overhead IDs
     CreateThread(function()
-        while scoreboardOpen do
+        while alive() do
             if IsPauseMenuActive() then
                 CloseScoreboard()
                 break
@@ -132,11 +165,13 @@ local function OpenScoreboard()
                 SendNUIMessage({ action = 'scroll', dir = -1 })
             end
 
-            for _, p in ipairs(GetNearbyPlayers(Config.OverheadDistance)) do
-                local entry = playerOptin[p.id]
-                if Config.ShowIDforALL or (entry and entry.optin) then
-                    local c = GetEntityCoords(p.ped)
-                    DrawText3D(vector3(c.x, c.y, c.z + 1.0), ('[%d]'):format(p.id), p.talking)
+            if Config.ShowIDforALL or canSeeIds then
+                for i = 1, #overhead do
+                    local p = overhead[i]
+                    if DoesEntityExist(p.ped) then
+                        local c = GetEntityCoords(p.ped)
+                        DrawText3D(vector3(c.x, c.y, c.z + 1.0), p.label, NetworkIsPlayerTalking(p.player))
+                    end
                 end
             end
 
@@ -150,6 +185,10 @@ end
 RegisterNetEvent('aj-scoreboard:client:SetActivityBusy', function(activity, busy)
     if not Config.IllegalActions[activity] then return end
     Config.IllegalActions[activity].busy = busy
+end)
+
+AddEventHandler('onResourceStop', function(resource)
+    if resource == GetCurrentResourceName() then CloseScoreboard() end
 end)
 
 -- Command
@@ -171,19 +210,5 @@ end
 
 CreateThread(function()
     Wait(1000)
-    local counters = {}
-    for i = 1, #Config.JobCounters do
-        local c = Config.JobCounters[i]
-        counters[i] = { job = c.job, label = c.label, icon = c.icon }
-    end
-    SendNUIMessage({
-        action = 'setup',
-        serverName = Config.ServerName,
-        tag = Config.ServerTag,
-        accent = Config.Accent,
-        toggle = Config.Toggle,
-        openKey = Config.OpenKey,
-        jobCounters = counters,
-        showDisconnected = Config.Disconnected.enabled,
-    })
+    SendSetup()
 end)

@@ -61,7 +61,7 @@ Everything is in `config.lua`.
 |---|---|---|
 | `Config.Toggle` | `true` | `true` = press to open / close, `false` = hold to show |
 | `Config.OpenKey` | `'HOME'` | Default key. Players can rebind it. |
-| `Config.MaxPlayers` | `sv_maxclients` | Max slots shown in the header |
+| `Config.MaxPlayers` | `0` | Max slots shown in the header. `0` = read `sv_maxclients` on the server |
 | `Config.RefreshInterval` | `4000` | How often (ms) the list refreshes from the server while open |
 
 ### Player list
@@ -72,7 +72,7 @@ Everything is in `config.lua`.
 | `Config.ShowStaffBadge` | `true` | STAFF tag for players with `admin` or `god` permission |
 | `Config.ShowJob` | `false` | Show each player's job under their name |
 | `Config.NearbyDistance` | `50.0` | Radius (metres) for the Nearby tab and tile |
-| `Config.ShowIDforALL` | `false` | `false` = only admins with opt-in see overhead IDs |
+| `Config.ShowIDforALL` | `false` | `false` = only admins with opt-in see overhead IDs (above everyone nearby) |
 | `Config.OverheadDistance` | `15.0` | How far away overhead IDs are drawn |
 
 ### Recently disconnected
@@ -97,7 +97,7 @@ Config.JobCounters = {
 }
 ```
 
-Only players who are **on duty** are counted. Available icons: `police`, `medic`, `wrench`, `taxi`, `gavel`, `star`. An empty table hides the strip.
+Only players who are **on duty** are counted. The optional `type` field also counts every job of that QBCore job type, so `type = 'leo'` adds BCSO / SASP to the Police counter. Available icons: `police`, `medic`, `wrench`, `taxi`, `gavel`, `star`. An empty table hides the strip.
 
 ### Heists
 
@@ -108,6 +108,8 @@ Config.IllegalActions = {
     ...
 }
 ```
+
+Police for heist requirements are on-duty players whose job is in `Config.PoliceJobs` or whose job type is in `Config.PoliceJobTypes` (default: `police` and every `leo` job).
 
 A heist shows **Available** when enough police are on duty and it isn't busy, **In progress** while busy, and **Need N more** otherwise.
 
@@ -134,7 +136,7 @@ These events are **server-only**. Clients cannot trigger them, so a cheater can'
 
 | Name | Side | Description |
 |---|---|---|
-| `aj-scoreboard:server:GetScoreboardData` | callback | Player list, on-duty counts, disconnects and heists |
+| `aj-scoreboard:server:GetScoreboardData` | callback | Player list, on-duty counts, disconnects and heists. Built at most once per second and shared by everyone with the board open. |
 | `aj-scoreboard:server:SetActivityBusy` | server event | `(activity, busy)` |
 | `aj-scoreboard:client:SetActivityBusy` | client event | Broadcast to everyone when a heist changes |
 
