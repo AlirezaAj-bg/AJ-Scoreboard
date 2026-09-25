@@ -257,7 +257,6 @@ function setup(d) {
 function open(d) {
     state.open = true;
     state.myId = d.myId;
-    state.maxPlayers = d.maxPlayers;
     state.nearbyDistance = d.nearbyDistance || state.nearbyDistance;
     $('sb').classList.add('on');
     renderHeader();
@@ -273,6 +272,7 @@ function close() {
 function update(d) {
     const firstLoad = state.players.length === 0;
     state.players = d.players || [];
+    state.maxPlayers = d.maxPlayers || state.maxPlayers;
     state.disconnected = d.disconnected || [];
     state.activities = d.activities || {};
     state.police = d.police || 0;

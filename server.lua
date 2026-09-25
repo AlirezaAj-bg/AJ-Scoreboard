@@ -37,12 +37,24 @@ local function PruneDisconnected()
     end
 end
 
--- Callbacks
+-- Is this player counted as police for heist requirements?
+local function IsPolice(job)
+    return Config.PoliceJobs[job.name] or (job.type ~= nil and Config.PoliceJobTypes[job.type]) or false
+end
 
-QBCore.Functions.CreateCallback('aj-scoreboard:server:GetScoreboardData', function(_, cb)
+local function MaxPlayers()
+    if Config.MaxPlayers and Config.MaxPlayers > 0 then return Config.MaxPlayers end
+    return GetConvarInt('sv_maxclients', 48)
+end
+
+-- The board data is the same for everyone, so it's built at most once per
+-- CACHE_MS and shared by every player who has the board open.
+local CACHE_MS = 1000
+local cache, cacheAt = nil, 0
+
+local function BuildSnapshot()
     local now = os.time()
     local players = {}
-    local optin = {}
     local jobs = {}
     local policeCount = 0
 
@@ -53,15 +65,19 @@ QBCore.Functions.CreateCallback('aj-scoreboard:server:GetScoreboardData', functi
     for _, Player in pairs(QBCore.Functions.GetQBPlayers()) do
         if Player then
             local src = Player.PlayerData.source
-            local job = Player.PlayerData.job
-            charNames[src] = CharacterName(Player)
+            local job = Player.PlayerData.job or {}
+            charNames[src] = CharacterName(Player) or charNames[src]
 
             if job.onduty then
-                if job.name == 'police' then policeCount += 1 end
-                if jobs[job.name] then jobs[job.name] = jobs[job.name] + 1 end
+                if IsPolice(job) then policeCount += 1 end
+                for i = 1, #Config.JobCounters do
+                    local c = Config.JobCounters[i]
+                    if c.job == job.name or (c.type and c.type == job.type) then
+                        jobs[c.job] = jobs[c.job] + 1
+                    end
+                end
             end
 
-            optin[src] = { optin = QBCore.Functions.IsOptin(src) }
             players[#players + 1] = {
                 id = src,
                 name = DisplayName(src, Player),
@@ -83,13 +99,26 @@ QBCore.Functions.CreateCallback('aj-scoreboard:server:GetScoreboardData', functi
         end
     end
 
-    cb({
+    return {
         players = players,
+        maxPlayers = MaxPlayers(),
         police = policeCount,
         jobs = jobs,
         disconnected = left,
         activities = Config.IllegalActions,
-    }, optin)
+    }
+end
+
+-- Callbacks
+
+QBCore.Functions.CreateCallback('aj-scoreboard:server:GetScoreboardData', function(source, cb)
+    local t = GetGameTimer()
+    if not cache or t - cacheAt >= CACHE_MS then
+        cache, cacheAt = BuildSnapshot(), t
+    end
+    -- Only tell the caller whether *they* may see overhead IDs; the list of
+    -- opted-in admins is never sent to clients.
+    cb(cache, QBCore.Functions.IsOptin(source) and true or false)
 end)
 
 -- Events
@@ -107,6 +136,13 @@ AddEventHandler('playerDropped', function(reason)
         PruneDisconnected()
     end
     charNames[src] = nil
+    cache = nil
+end)
+
+AddEventHandler('QBCore:Server:PlayerLoaded', function(Player)
+    if Player and Player.PlayerData then
+        charNames[Player.PlayerData.source] = CharacterName(Player)
+    end
 end)
 
 -- Heist state. Server-side only (AddEventHandler, not RegisterNetEvent) so
@@ -114,6 +150,7 @@ end)
 local function SetActivityBusy(activity, bool)
     if not Config.IllegalActions[activity] then return end
     Config.IllegalActions[activity].busy = bool and true or false
+    cache = nil
     TriggerClientEvent('aj-scoreboard:client:SetActivityBusy', -1, activity, Config.IllegalActions[activity].busy)
 end
 
