@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="style.css" />
+        <title>AJ Scoreboard</title>
+    </head>
+    <body>
+        <div class="sb" id="sb">
+            <div class="sb-glow"></div>
+
+            <header class="sb-head">
+                <div class="sb-title-row">
+                    <div class="brand">
+                        <div class="brand-mark" id="brand-mark">AJ</div>
+                        <div class="brand-text">
+                            <div class="sb-eyebrow"><span class="live-dot"></span>Live · Scoreboard</div>
+                            <h1 class="sb-title" id="server-name">SERVER</h1>
+                        </div>
+                    </div>
+                    <div class="sb-count"><b id="count-online">0</b><span>/<i id="count-max">0</i></span></div>
+                </div>
+                <div class="cap"><div class="cap-fill" id="cap-fill"></div></div>
+            </header>
+
+            <section class="tiles">
+                <div class="tile">
+                    <div class="tile-label">Online</div>
+                    <div class="tile-value" id="tile-online">0</div>
+                </div>
+                <div class="tile">
+                    <div class="tile-label">Nearby</div>
+                    <div class="tile-value" id="tile-nearby">0</div>
+                </div>
+                <div class="tile">
+                    <div class="tile-label">Left</div>
+                    <div class="tile-value" id="tile-left">0</div>
+                </div>
+            </section>
+
+            <section class="services" id="services"></section>
+
+            <nav class="tabs">
+                <kbd>Q</kbd>
+                <div class="tab-track" id="tabs">
+                    <div class="tab-ink" id="tab-ink"></div>
+                </div>
+                <kbd>E</kbd>
+            </nav>
+
+            <div class="list-wrap">
+                <div class="list" id="list"></div>
+                <div class="list-fade"></div>
+            </div>
+
+            <footer class="sb-foot">
+                <div class="foot-me"><span class="me-tag">You</span><span id="me-id">ID —</span><span class="dot-sep"></span><span id="me-ping">— ms</span></div>
+                <div class="hints"><span><kbd class="sm">⇕</kbd>Scroll</span><span><kbd class="sm" id="hint-key">HOME</kbd><i id="hint-verb">Close</i></span></div>
+            </footer>
+        </div>
+        <script src="app.js"></script>
+    </body>
+</html>
